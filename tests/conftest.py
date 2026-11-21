@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")  # UI tests run headless
+
+from datetime import datetime, timezone  # noqa: E402
 
 import pytest
 
