@@ -1,0 +1,10 @@
+[project]
+name = "worktrack"
+version = "0.1.0"
+description = "WorkTrack - personal time tracker (local, offline)"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+qt_api = "pyside6"
+addopts = "-ra"

@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# PyInstaller (the .spec file IS versioned on purpose)
+build/
+dist/
+
+# Data: never commit databases, logs, backups or exports
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+*.log
+logs/
+backups/
+exports/
+*.xlsx
+*.csv
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
