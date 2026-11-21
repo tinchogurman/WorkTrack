@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -121,6 +121,11 @@ class MainWindow(QMainWindow):
         self.timer_view.go_to_projects.connect(lambda: self.go_to(2))
         self.signals.session_state_changed.connect(self._on_session_state)
         self._on_session_state()
+
+    def shutdown(self) -> None:
+        """Stop every periodic timer (before the database connection is closed)."""
+        for timer in self.findChildren(QTimer):
+            timer.stop()
 
     def go_to(self, index: int) -> None:
         if SECTIONS[index][1]:

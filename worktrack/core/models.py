@@ -43,6 +43,36 @@ class TimeEntry:
 
 
 @dataclass(frozen=True)
+class Interruption:
+    """A suspected break inside a session (suspend/resume or a long heartbeat gap)."""
+
+    id: int
+    entry_id: int
+    start_time: datetime
+    end_time: datetime
+    source: str  # 'heartbeat_gap' | 'power_event'
+    status: str  # 'pending' | 'kept' | 'discounted' | 'adjusted'
+    discount_start: datetime | None
+    discount_end: datetime | None
+    created_at: datetime
+    resolved_at: datetime | None
+
+    @property
+    def seconds(self) -> int:
+        return int((self.end_time - self.start_time).total_seconds())
+
+    @property
+    def is_pending(self) -> bool:
+        return self.status == "pending"
+
+    @property
+    def discounted_interval(self) -> tuple[datetime, datetime] | None:
+        if self.discount_start is None or self.discount_end is None:
+            return None
+        return self.discount_start, self.discount_end
+
+
+@dataclass(frozen=True)
 class EntryView:
     """A time entry joined with its project and task (for history and lists)."""
 

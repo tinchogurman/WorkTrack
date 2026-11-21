@@ -14,6 +14,7 @@ from worktrack.analytics.periods import Period, add_months, month_start
 from worktrack.analytics.proration import to_local
 from worktrack.core.clock import Clock
 from worktrack.repositories.entries import EntryRepository
+from worktrack.repositories.interruptions import InterruptionRepository
 
 MONTHLY_TREND_MONTHS = 12
 
@@ -42,6 +43,7 @@ class AnalyticsService:
         self.clock = clock
         self.tz = tz
         self.entries = EntryRepository(conn)
+        self.interruptions = InterruptionRepository(conn)
 
     def today(self) -> date:
         return to_local(self.clock.now(), self.tz).date()
@@ -59,7 +61,8 @@ class AnalyticsService:
         views = self.entries.list_views_in_range(
             start, end, now, project_id=project_id, task_id=task_id, include_active=include_active
         )
-        return build_segments(views, period, now, self.tz)
+        discounts = self.interruptions.discounts_for_entries([v.entry.id for v in views])
+        return build_segments(views, period, now, self.tz, discounts)
 
     def dashboard(self, period: Period) -> DashboardData:
         today = self.today()

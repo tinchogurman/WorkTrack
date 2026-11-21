@@ -12,6 +12,8 @@ from __future__ import annotations
 import math
 from datetime import date, datetime, time, timedelta, timezone, tzinfo
 
+from worktrack.core.intervals import subtract
+
 
 def to_local(value: datetime, tz: tzinfo | None) -> datetime:
     return value.astimezone(tz) if tz is not None else value.astimezone()
@@ -46,37 +48,42 @@ def split_by_day(
     end: datetime,
     worked_seconds: int | None = None,
     tz: tzinfo | None = None,
+    exclude: list[tuple[datetime, datetime]] | None = None,
 ) -> list[tuple[date, int]]:
     """Return [(local_date, seconds)] for the interval [start, end).
 
-    `worked_seconds` (default: end - start) is spread proportionally to the
-    elapsed time inside each day, so a session whose worked time is lower than
-    its elapsed time (e.g. a discounted suspension) is still split fairly.
-    Days with a zero share are omitted.
+    `exclude`: ranges removed exactly before splitting (discounted
+    interruptions), so a discounted night of suspension takes nothing from
+    the days it covers. `worked_seconds` (default: the remaining time) is then
+    spread proportionally over what is left, which keeps the per-day sum equal
+    to the stored duration. Days with a zero share are omitted.
     """
     if start.tzinfo is None or end.tzinfo is None:
         raise ValueError("split_by_day requires aware datetimes")
     # Arithmetic between datetimes sharing a tzinfo object is wall-clock based
     # in Python (ignores DST shifts); doing it in UTC gives real elapsed time.
-    first_day = to_local(start, tz).date()
     start, end = start.astimezone(timezone.utc), end.astimezone(timezone.utc)
     if end <= start:
         return []
-    elapsed_total = (end - start).total_seconds()
+    pieces = [(start, end)]
+    if exclude:
+        utc = [(s.astimezone(timezone.utc), e.astimezone(timezone.utc)) for s, e in exclude]
+        pieces = subtract(start, end, utc) or [(start, end)]  # never drop worked time
+    elapsed_total = sum((e - s).total_seconds() for s, e in pieces)
     worked = int(round(elapsed_total)) if worked_seconds is None else int(worked_seconds)
 
-    days: list[date] = []
-    weights: list[float] = []
-    cursor = start
-    day = first_day
-    while cursor < end:
-        next_midnight = local_midnight(day + timedelta(days=1), tz).astimezone(timezone.utc)
-        segment_end = min(end, next_midnight)
-        if segment_end > cursor:
-            days.append(day)
-            weights.append((segment_end - cursor).total_seconds())
-            cursor = segment_end
-        day += timedelta(days=1)
+    weight_by_day: dict[date, float] = {}
+    for piece_start, piece_end in pieces:
+        cursor = piece_start
+        day = to_local(piece_start, tz).date()
+        while cursor < piece_end:
+            next_midnight = local_midnight(day + timedelta(days=1), tz).astimezone(timezone.utc)
+            segment_end = min(piece_end, next_midnight)
+            if segment_end > cursor:
+                weight_by_day[day] = weight_by_day.get(day, 0.0) + (segment_end - cursor).total_seconds()
+                cursor = segment_end
+            day += timedelta(days=1)
 
-    shares = allocate(worked, weights)
+    days = sorted(weight_by_day)
+    shares = allocate(worked, [weight_by_day[d] for d in days])
     return [(d, s) for d, s in zip(days, shares) if s > 0]

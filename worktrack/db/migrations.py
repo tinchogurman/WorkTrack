@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 import sqlite3
 
-from worktrack.db.schema import SCHEMA_V1
+from worktrack.db.schema import SCHEMA_V1, SCHEMA_V2
 
 log = logging.getLogger(__name__)
 
 # MIGRATIONS[i] upgrades schema version i -> i + 1.
-MIGRATIONS: list[str] = [SCHEMA_V1]
+MIGRATIONS: list[str] = [SCHEMA_V1, SCHEMA_V2]
 SCHEMA_VERSION = len(MIGRATIONS)
 
 

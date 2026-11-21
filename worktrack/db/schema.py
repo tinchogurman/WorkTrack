@@ -79,4 +79,41 @@ CREATE INDEX ix_entries_project_start ON time_entries (project_id, start_time);
 CREATE INDEX ix_entries_task ON time_entries (task_id, project_id);
 """
 
+# Version 2: suspected interruptions (suspend/resume, long gaps between
+# heartbeats) detected during a session. Nothing is discounted unless the
+# user decides so: 'pending' -> 'kept' | 'discounted' | 'adjusted'.
+# The discounted range is stored separately from the detected one (audit),
+# and is the basis for a future pause/resume feature.
+SCHEMA_V2 = f"""
+CREATE TABLE session_interruptions (
+    id              INTEGER PRIMARY KEY,
+    entry_id        INTEGER NOT NULL
+                    REFERENCES time_entries (id) ON DELETE CASCADE ON UPDATE RESTRICT,
+    start_time      TEXT    NOT NULL,
+    end_time        TEXT    NOT NULL,
+    source          TEXT    NOT NULL,
+    status          TEXT    NOT NULL DEFAULT 'pending',
+    discount_start  TEXT,
+    discount_end    TEXT,
+    created_at      TEXT    NOT NULL,
+    resolved_at     TEXT,
+    CONSTRAINT ck_int_start_format CHECK (start_time GLOB {TS_GLOB}),
+    CONSTRAINT ck_int_end_format CHECK (end_time GLOB {TS_GLOB}),
+    CONSTRAINT ck_int_created_format CHECK (created_at GLOB {TS_GLOB}),
+    CONSTRAINT ck_int_interval CHECK (end_time > start_time),
+    CONSTRAINT ck_int_source CHECK (source IN ('heartbeat_gap', 'power_event')),
+    CONSTRAINT ck_int_status CHECK (status IN ('pending', 'kept', 'discounted', 'adjusted')),
+    CONSTRAINT ck_int_discount_iff_status CHECK (
+        (status IN ('discounted', 'adjusted')) = (discount_start IS NOT NULL AND discount_end IS NOT NULL)
+    ),
+    CONSTRAINT ck_int_discount_interval CHECK (
+        discount_start IS NULL OR (
+            discount_start GLOB {TS_GLOB} AND discount_end GLOB {TS_GLOB} AND discount_end > discount_start
+        )
+    )
+);
+
+CREATE INDEX ix_interruptions_entry ON session_interruptions (entry_id, status);
+"""
+
 EXPECTED_TABLES = frozenset({"projects", "tasks", "time_entries"})

@@ -20,6 +20,7 @@ from worktrack.analytics.proration import to_local
 from worktrack.core.clock import Clock
 from worktrack.core.errors import ValidationError
 from worktrack.repositories.entries import EntryRepository
+from worktrack.repositories.interruptions import InterruptionRepository
 from worktrack.repositories.projects import ProjectRepository
 from worktrack.repositories.tasks import TaskRepository
 
@@ -61,6 +62,7 @@ class ReportService:
         self.clock = clock
         self.tz = tz
         self.entries = EntryRepository(conn)
+        self.interruptions = InterruptionRepository(conn)
         self.projects = ProjectRepository(conn)
         self.tasks = TaskRepository(conn)
 
@@ -83,7 +85,8 @@ class ReportService:
             start, end, now, project_id=project_id, task_id=task_id, include_active=False
         )
         views = sorted(views, key=lambda v: (v.entry.start_time, v.entry.id))
-        seg = build_segments(views, period, now, self.tz)
+        discounts = self.interruptions.discounts_for_entries([v.entry.id for v in views])
+        seg = build_segments(views, period, now, self.tz, discounts)
         in_period = seg.groupby("entry_id")["seconds"].sum() if len(seg) else pd.Series(dtype="int64")
 
         details = [

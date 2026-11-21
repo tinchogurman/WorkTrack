@@ -13,6 +13,7 @@ from worktrack.db.migrations import migrate
 from worktrack.services.analytics_service import AnalyticsService
 from worktrack.services.backup_service import BackupService
 from worktrack.services.entry_service import EntryService
+from worktrack.services.interruption_service import InterruptionService
 from worktrack.services.project_service import ProjectService
 from worktrack.services.recovery_service import RecoveryService
 from worktrack.services.report_service import ReportService
@@ -29,6 +30,7 @@ class AppServices:
     recovery: RecoveryService
     analytics: AnalyticsService
     reports: ReportService
+    interruptions: InterruptionService
     db_path: Path
     tz: tzinfo | None = None  # None = operating system local time zone
     backups: BackupService = field(init=False)
@@ -60,6 +62,7 @@ class AppServices:
             recovery=RecoveryService(timer),
             analytics=AnalyticsService(conn, clock, tz),
             reports=ReportService(conn, clock, tz),
+            interruptions=InterruptionService(conn, clock),
             db_path=Path(db_file),
             tz=tz,
             backups_dir=backups_dir,

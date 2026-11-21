@@ -46,7 +46,8 @@ def window(qtbot, services):
     w = MainWindow(services)
     qtbot.addWidget(w)
     w.show()
-    return w
+    yield w
+    w.shutdown()  # stop timers before the database is closed
 
 
 def test_main_window_sections(window):
@@ -183,6 +184,7 @@ def test_timer_shows_session_already_active_in_db(qtbot, services, project, cloc
     assert w.timer_view.is_running()
     assert w.timer_view.task_combo.currentText() == "Desde otro lado"
     assert w.timer_view.display.text() == "00:02:00"
+    w.shutdown()
 
 
 def test_entry_dialog_shows_duration_before_saving(qtbot, services, project, clock):

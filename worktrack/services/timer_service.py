@@ -26,7 +26,9 @@ from worktrack.core.models import EntryView, TimeEntry
 from worktrack.core.timeutils import seconds_between
 from worktrack.db.connection import transaction
 from worktrack.db.errors import integrity_errors
+from worktrack.core.intervals import clipped_total
 from worktrack.repositories.entries import EntryRepository
+from worktrack.repositories.interruptions import InterruptionRepository
 from worktrack.services.project_service import ProjectService, clean_optional_text
 
 log = logging.getLogger(__name__)
@@ -46,6 +48,7 @@ class TimerService:
         self.clock = clock
         self.projects = projects
         self.entries = EntryRepository(conn)
+        self.interruptions = InterruptionRepository(conn)
 
     def get_active(self) -> TimeEntry | None:
         return self.entries.get_active()
@@ -53,8 +56,17 @@ class TimerService:
     def get_active_view(self) -> EntryView | None:
         return self.entries.get_active_view()
 
+    def worked_seconds(self, entry: TimeEntry, until: datetime) -> int:
+        """Elapsed time from the start to `until` minus discounted interruptions."""
+        if until <= entry.start_time:
+            return 0
+        discounts = self.interruptions.discounts_for_entries([entry.id]).get(entry.id, [])
+        elapsed = seconds_between(entry.start_time, until)
+        return max(0, elapsed - clipped_total(discounts, entry.start_time, until))
+
     def elapsed_seconds(self, entry: TimeEntry) -> int:
-        return max(0, seconds_between(entry.start_time, self.clock.now()))
+        """Worked seconds of a running session up to now (shown by the stopwatch)."""
+        return self.worked_seconds(entry, self.clock.now())
 
     def start(self, project_id: int, task_name: str, description: str | None = None) -> TimeEntry:
         description = clean_optional_text(description)
@@ -107,7 +119,7 @@ class TimerService:
                     raise ValidationError(
                         "La hora de fin no puede ser anterior al inicio de la sesión."
                     )
-            duration = seconds_between(active.start_time, end)
+            duration = self.worked_seconds(active, end)
             self.entries.finish(active.id, end, duration)
         log.info("Session finished id=%s reason=%s duration=%ss", active.id, reason, duration)
         return self.entries.get(active.id)

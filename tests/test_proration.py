@@ -81,6 +81,15 @@ def test_sum_is_always_preserved(worked):
     assert sum(s for _, s in parts) == worked
 
 
+def test_exclude_ranges_exactly():
+    # 22:00 -> 08:00 with 23:30 -> 07:30 excluded: 1.5 h + 0.5 h
+    parts = split_by_day(
+        local(BA, 2026, 3, 10, 22), local(BA, 2026, 3, 11, 8), tz=BA,
+        exclude=[(local(BA, 2026, 3, 10, 23, 30), local(BA, 2026, 3, 11, 7, 30))],
+    )
+    assert parts == [(date(2026, 3, 10), 5400), (date(2026, 3, 11), 1800)]
+
+
 def test_allocate_largest_remainder():
     assert allocate(10, [1, 1, 1]) == [4, 3, 3]
     assert sum(allocate(7, [0.3, 0.3, 0.4])) == 7

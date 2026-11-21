@@ -19,7 +19,9 @@ from worktrack.core.models import EntryView, TimeEntry
 from worktrack.core.timeutils import format_local_datetime, format_local_time, seconds_between
 from worktrack.db.connection import transaction
 from worktrack.db.errors import integrity_errors
+from worktrack.core.intervals import clipped_total
 from worktrack.repositories.entries import EntryRepository
+from worktrack.repositories.interruptions import InterruptionRepository
 from worktrack.services.project_service import ProjectService, clean_name, clean_optional_text
 
 log = logging.getLogger(__name__)
@@ -55,6 +57,7 @@ class EntryService:
         self.projects = projects
         self.tz = tz
         self.entries = EntryRepository(conn)
+        self.interruptions = InterruptionRepository(conn)
 
     # --- reads -------------------------------------------------------------
     def list_entries(
@@ -106,7 +109,14 @@ class EntryService:
             )
         clean_optional_text(draft.description)
         self._check_overlap(start, end, entry_id)
-        return seconds_between(start, end)
+        return seconds_between(start, end) - self.discounted_seconds(entry_id, start, end)
+
+    def discounted_seconds(self, entry_id: int | None, start: datetime, end: datetime) -> int:
+        """Seconds of the entry's discounted interruptions that fall inside [start, end)."""
+        if entry_id is None:
+            return 0
+        discounts = self.interruptions.discounts_for_entries([entry_id]).get(entry_id, [])
+        return clipped_total(discounts, start, end)
 
     def _editable(self, entry_id: int) -> TimeEntry:
         entry = self.entries.get(entry_id)
@@ -156,7 +166,8 @@ class EntryService:
         return self.entries.get(entry_id)
 
     def update_entry(self, entry_id: int, draft: EntryDraft) -> TimeEntry:
-        """Edit a finished session. duration_seconds is recalculated as end - start."""
+        """Edit a finished session. duration_seconds is recalculated as
+        end - start minus any discounted interruption inside the new range."""
         with integrity_errors(fk_error=TaskProjectMismatchError()), transaction(self.conn):
             existing = self._editable(entry_id)
             duration = self.validate(draft, entry_id)
