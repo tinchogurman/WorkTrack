@@ -25,6 +25,7 @@ from worktrack.core.timeutils import (
     format_decimal_hours,
     format_hms,
     format_local_date,
+    format_local_end_time,
     format_local_time,
     to_db,
 )
@@ -198,7 +199,9 @@ class HistoryView(QWidget):
             end_item.setForeground(QBrush(QColor(theme.GREEN)))
             duration = _item("—", -1)
         else:
-            end_item = _item(format_local_time(e.end_time), to_db(e.end_time))
+            end_item = _item(format_local_end_time(e.start_time, e.end_time), to_db(e.end_time))
+            if e.end_time.astimezone().date() != e.start_time.astimezone().date():
+                end_item.setToolTip(f"Termina el {format_local_date(e.end_time)}")
             duration = _item(format_hms(e.duration_seconds), e.duration_seconds)
         duration.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
         row = [

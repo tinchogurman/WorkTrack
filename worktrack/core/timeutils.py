@@ -63,5 +63,12 @@ def format_local_time(value: datetime) -> str:
     return to_local(value).strftime("%H:%M:%S")
 
 
+def format_local_end_time(start: datetime, end: datetime) -> str:
+    """End time, marked '(+N)' when it falls N local days after the start."""
+    days = (to_local(end).date() - to_local(start).date()).days
+    text = format_local_time(end)
+    return f"{text} (+{days})" if days > 0 else text
+
+
 def format_local_datetime(value: datetime) -> str:
     return to_local(value).strftime("%d/%m/%Y %H:%M:%S")

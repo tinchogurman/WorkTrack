@@ -46,6 +46,8 @@ class PeriodPicker(QWidget):
         self.preset = QComboBox()
         for key in presets:
             self.preset.addItem(PRESETS[key][0], key)
+        longest = max(self.preset.fontMetrics().horizontalAdvance(PRESETS[k][0]) for k in presets)
+        self.preset.setMinimumWidth(longest + 48)  # text + stylesheet padding + arrow
         self.from_edit = QDateEdit()
         self.to_edit = QDateEdit()
         for edit in (self.from_edit, self.to_edit):

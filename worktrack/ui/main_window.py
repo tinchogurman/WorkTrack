@@ -25,6 +25,7 @@ from worktrack.ui.signals import AppSignals
 from worktrack.ui.views.dashboard_view import DashboardView
 from worktrack.ui.views.history_view import HistoryView
 from worktrack.ui.views.projects_view import ProjectsView
+from worktrack.ui.views.reports_view import ReportsView
 from worktrack.ui.views.timer_view import TimerView
 from worktrack.ui.widgets import muted, page_title
 
@@ -36,7 +37,7 @@ SECTIONS = [
     ("Dashboard", True, None),
     ("Projects", True, None),
     ("History", True, None),
-    ("Reports", False, 2),
+    ("Reports", True, None),
     ("Settings", False, 3),
 ]
 
@@ -87,11 +88,13 @@ class MainWindow(QMainWindow):
         self.projects_view = ProjectsView(services, self.signals)
         self.history_view = HistoryView(services, self.signals)
         self.dashboard_view = DashboardView(services, self.signals)
+        self.reports_view = ReportsView(services, self.signals)
         built = {
             "Timer": self.timer_view,
             "Dashboard": self.dashboard_view,
             "Projects": self.projects_view,
             "History": self.history_view,
+            "Reports": self.reports_view,
         }
 
         for i, (name, available, phase) in enumerate(SECTIONS):

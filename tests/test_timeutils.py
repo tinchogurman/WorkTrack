@@ -36,5 +36,14 @@ def test_formatting(seconds, hms, dec):
     assert tu.format_decimal_hours(seconds) == dec
 
 
+def test_end_time_marks_next_day():
+    start = datetime(2026, 3, 10, 23, 0).astimezone()
+    assert tu.format_local_end_time(start, start.replace(hour=23, minute=30)) == "23:30:00"
+    from datetime import timedelta
+
+    assert tu.format_local_end_time(start, start + timedelta(hours=2)) == "01:00:00 (+1)"
+    assert tu.format_local_end_time(start, start + timedelta(days=2)) == "23:00:00 (+2)"
+
+
 def test_decimal_hours_billing_example():
     assert tu.decimal_hours(90 * 60) == 1.5

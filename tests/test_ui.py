@@ -82,6 +82,50 @@ def test_dashboard_view_matches_records(window, services, project, other_project
     assert dv.data.period.days == 7
 
 
+def test_reports_view_generate_and_export(window, services, project, other_project, clock, tmp_path, monkeypatch, no_modal_boxes):
+    from openpyxl import load_workbook
+    from PySide6.QtWidgets import QFileDialog
+
+    from worktrack.services.entry_service import EntryDraft
+
+    now = clock.now()
+    services.entries.add_manual(EntryDraft(project.id, "A", now - timedelta(hours=3), now - timedelta(hours=1, minutes=30)))
+    services.entries.add_manual(EntryDraft(other_project.id, "B", now - timedelta(hours=1), now))
+    window.signals.projects_changed.emit()  # projects were created after the window
+    window.signals.entries_changed.emit()
+    window.go_to(4)
+    rv = window.reports_view
+    assert rv.report is not None and rv.report.total_seconds == 9000
+    assert rv.kpi_total.value.text() == "02:30:00"
+    assert rv.table_project.rowCount() == 2 and rv.table_sessions.rowCount() == 2
+    assert rv.export_xlsx_btn.isEnabled()
+
+    rv.kind.setCurrentIndex(rv.kind.findData("day"))
+    assert rv.report.period.days == 1
+
+    rv.filter.project_combo.setCurrentIndex(rv.filter.project_combo.findData(other_project.id))
+    assert rv.report.total_seconds == 3600 and rv.report.project_filter == other_project.name
+
+    target = tmp_path / "out" / "reporte"  # no extension: it is added
+    (tmp_path / "out").mkdir()
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(target), "")))
+    rv.export("xlsx")
+    wb = load_workbook(tmp_path / "out" / "reporte.xlsx")
+    summary = {row[0].value: row[1].value for row in wb["Resumen"].iter_rows()}
+    assert summary["Total (horas)"] == 1.0 and summary["Proyecto"] == other_project.name
+    rv.export("csv")
+    assert (tmp_path / "out" / "reporte.csv").exists()
+    assert any("exportado" in text for _, text in no_modal_boxes)
+
+
+def test_reports_invalid_range(window):
+    window.go_to(4)
+    rv = window.reports_view
+    rv.kind.setCurrentIndex(rv.kind.findData("range"))
+    rv.to_date.setDate(rv.from_date.date().addDays(-1))
+    assert "anterior" in rv.error.text()
+
+
 def test_dashboard_empty(window):
     window.go_to(1)
     assert window.dashboard_view.kpi_total.value.text() == "00:00:00"

@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from worktrack.core.models import EntryView
-from worktrack.core.timeutils import format_hms, format_local_time, to_local
+from worktrack.core.timeutils import format_hms, format_local_end_time, format_local_time, to_local
 from worktrack.services.context import AppServices
 from worktrack.services.timer_service import HEARTBEAT_INTERVAL_SECONDS
 from worktrack.ui import theme
@@ -237,7 +237,9 @@ class TimerView(QWidget):
                 project_item,
                 QTableWidgetItem(view.task_name),
                 QTableWidgetItem(format_local_time(e.start_time)),
-                QTableWidgetItem(format_local_time(e.end_time) if e.end_time else "En curso"),
+                QTableWidgetItem(
+                    format_local_end_time(e.start_time, e.end_time) if e.end_time else "En curso"
+                ),
                 QTableWidgetItem(format_hms(e.duration_seconds) if e.duration_seconds is not None else "—"),
                 QTableWidgetItem(e.description or ""),
             ]

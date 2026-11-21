@@ -92,6 +92,7 @@ QTableView, QTableWidget, QListWidget {{
 }}
 QTableView::item, QTableWidget::item {{ padding: 6px; border: none; }}
 QListWidget::item {{ padding: 7px 8px; }}
+QHeaderView {{ background: {SURFACE}; border: none; }}
 QHeaderView::section {{
     background: {SURFACE}; color: {MUTED}; border: none; border-bottom: 1px solid {BORDER};
     padding: 8px 6px; font-weight: 600;
@@ -115,6 +116,13 @@ QCheckBox::indicator:checked, QRadioButton::indicator:checked {{
 }}
 QCheckBox::indicator:hover, QRadioButton::indicator:hover {{ border-color: {ACCENT}; }}
 QSplitter::handle {{ background: {BG}; }}
+QTabWidget::pane {{ border: none; }}
+QTabBar::tab {{
+    background: transparent; color: {MUTED}; padding: 8px 14px; margin-right: 4px;
+    border-bottom: 2px solid transparent;
+}}
+QTabBar::tab:selected {{ color: {TEXT}; border-bottom: 2px solid {ACCENT}; }}
+QTabBar::tab:hover {{ color: {TEXT}; }}
 QMessageBox, QDialog {{ background: {BG}; }}
 QCalendarWidget QWidget {{ alternate-background-color: {SURFACE_2}; }}
 """
