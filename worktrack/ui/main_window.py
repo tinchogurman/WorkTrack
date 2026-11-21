@@ -22,6 +22,7 @@ from worktrack import APP_NAME
 from worktrack.services.context import AppServices
 from worktrack.ui.icons import app_icon
 from worktrack.ui.signals import AppSignals
+from worktrack.ui.views.dashboard_view import DashboardView
 from worktrack.ui.views.history_view import HistoryView
 from worktrack.ui.views.projects_view import ProjectsView
 from worktrack.ui.views.timer_view import TimerView
@@ -32,7 +33,7 @@ log = logging.getLogger(__name__)
 # (label, available, phase)
 SECTIONS = [
     ("Timer", True, None),
-    ("Dashboard", False, 2),
+    ("Dashboard", True, None),
     ("Projects", True, None),
     ("History", True, None),
     ("Reports", False, 2),
@@ -85,7 +86,13 @@ class MainWindow(QMainWindow):
         self.timer_view = TimerView(services, self.signals)
         self.projects_view = ProjectsView(services, self.signals)
         self.history_view = HistoryView(services, self.signals)
-        built = {"Timer": self.timer_view, "Projects": self.projects_view, "History": self.history_view}
+        self.dashboard_view = DashboardView(services, self.signals)
+        built = {
+            "Timer": self.timer_view,
+            "Dashboard": self.dashboard_view,
+            "Projects": self.projects_view,
+            "History": self.history_view,
+        }
 
         for i, (name, available, phase) in enumerate(SECTIONS):
             item = QListWidgetItem(name)

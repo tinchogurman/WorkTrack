@@ -21,10 +21,12 @@ NAME_MAX_LEN = 100
 DESCRIPTION_MAX_LEN = 1000
 COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
 
-# Default palette offered in the UI (readable on a dark background).
+# Default project colors, in suggestion order. Validated for the dark chart
+# surface (#1B1E25): lightness band, chroma, contrast >= 3:1 and colorblind
+# separation between neighbours. Users may still pick any other color.
 PALETTE = [
-    "#22C55E", "#3B82F6", "#F59E0B", "#EF4444", "#A855F7",
-    "#06B6D4", "#EC4899", "#84CC16", "#F97316", "#64748B",
+    "#3987E5", "#D95926", "#199E70", "#C98500",
+    "#D55181", "#0CA30C", "#9085E9", "#E66767",
 ]
 
 

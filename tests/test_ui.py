@@ -53,11 +53,39 @@ def test_main_window_sections(window):
     assert window.nav.count() == len(SECTIONS) == 6
     names = [window.nav.item(i).text() for i in range(window.nav.count())]
     assert names == ["Timer", "Dashboard", "Projects", "History", "Reports", "Settings"]
-    assert not (window.nav.item(1).flags() & Qt.ItemIsEnabled)  # Dashboard: phase 2
+    assert not (window.nav.item(5).flags() & Qt.ItemIsEnabled)  # Settings: phase 3
     window.go_to(3)
     assert window.stack.currentWidget() is window.history_view
-    window.go_to(1)  # disabled: ignored
+    window.go_to(5)  # disabled: ignored
     assert window.stack.currentWidget() is window.history_view
+    window.go_to(1)
+    assert window.stack.currentWidget() is window.dashboard_view
+
+
+def test_dashboard_view_matches_records(window, services, project, other_project, clock):
+    from worktrack.services.entry_service import EntryDraft
+
+    now = clock.now()
+    services.entries.add_manual(EntryDraft(project.id, "A", now - timedelta(hours=3), now - timedelta(hours=1, minutes=30)))
+    services.entries.add_manual(EntryDraft(other_project.id, "B", now - timedelta(hours=1), now))
+    window.signals.entries_changed.emit()
+    window.go_to(1)
+    dv = window.dashboard_view
+    assert dv.data is not None
+    assert dv.kpi_total.value.text() == "02:30:00"
+    assert dv.kpi_today.value.text() == "02:30:00"
+    assert dv.kpi_sessions.value.text() == "2"
+    assert dv.kpi_top.value.text() == project.name
+    assert "2,50 h" in dv.kpi_total.detail.text()
+    assert dv.chart_project._values == pytest.approx([1.5, 1.0])
+    dv.period_picker.set_preset("week")
+    assert dv.data.period.days == 7
+
+
+def test_dashboard_empty(window):
+    window.go_to(1)
+    assert window.dashboard_view.kpi_total.value.text() == "00:00:00"
+    assert window.dashboard_view.chart_day._values == []
 
 
 def test_play_stop_from_ui(qtbot, window, services, project, clock):
