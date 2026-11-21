@@ -26,10 +26,17 @@ from PySide6.QtWidgets import (
 )
 
 from worktrack.core.models import EntryView
-from worktrack.core.timeutils import format_hms, format_local_end_time, format_local_time, to_local
+from worktrack.core.timeutils import (
+    format_hms,
+    format_local_datetime,
+    format_local_end_time,
+    format_local_time,
+    to_local,
+)
 from worktrack.services.context import AppServices
 from worktrack.services.timer_service import HEARTBEAT_INTERVAL_SECONDS
 from worktrack.ui import theme
+from worktrack.ui.dialogs.interruption_dialog import InterruptionDialog, resolve_pending
 from worktrack.ui.errors import show_error
 from worktrack.ui.icons import color_dot
 from worktrack.ui.signals import AppSignals
@@ -43,12 +50,14 @@ TODAY_COLUMNS = ["Proyecto", "Tarea", "Inicio", "Fin", "Duración", "Descripció
 class TimerView(QWidget):
     elapsed_changed = Signal(str)  # "" when idle; used for the window title
     go_to_projects = Signal()
+    interruption_detected = Signal(str)  # message for a tray notification
 
     def __init__(self, services: AppServices, signals: AppSignals, parent=None) -> None:
         super().__init__(parent)
         self.services = services
         self.signals = signals
         self._active: EntryView | None = None
+        self._suspended_at = None
         self._today_completed_seconds = 0
         self._today_date = None
 
@@ -105,6 +114,31 @@ class TimerView(QWidget):
         self.no_projects_hint.clicked.connect(self.go_to_projects)
         grid.addWidget(self.no_projects_hint, 4, 0, 1, 2)
         root.addWidget(card)
+
+        # Pending interruption banner (suspend/resume or long gap); never auto-discounted.
+        self.banner = Card()
+        self.banner.setStyleSheet(
+            f"QFrame#Card {{ border: 1px solid {theme.WARNING}; background: #2A2418; }}"
+        )
+        banner_row = QHBoxLayout(self.banner)
+        banner_row.setContentsMargins(16, 10, 12, 10)
+        self.banner_text = QLabel()
+        self.banner_text.setWordWrap(True)
+        banner_row.addWidget(self.banner_text, 1)
+        self.keep_btn = QPushButton("Conservar")
+        self.keep_btn.setToolTip("Seguir contando ese tiempo como trabajado")
+        self.keep_btn.clicked.connect(lambda: self._decide("keep"))
+        self.discount_btn = QPushButton("Descontar")
+        self.discount_btn.setToolTip("Restar el intervalo detectado de la sesión")
+        self.discount_btn.clicked.connect(lambda: self._decide("discount"))
+        self.adjust_btn = QPushButton("Corregir…")
+        self.adjust_btn.setToolTip("Elegir otro tramo a descontar")
+        self.adjust_btn.clicked.connect(lambda: self._decide("adjust"))
+        for b in (self.keep_btn, self.discount_btn, self.adjust_btn):
+            banner_row.addWidget(b)
+        self.banner.hide()
+        self._banner_item = None
+        root.addWidget(self.banner)
 
         center = QVBoxLayout()
         center.setSpacing(6)
@@ -214,6 +248,7 @@ class TimerView(QWidget):
         self.no_projects_hint.setVisible(self.project_combo.count() == 0 and not running)
         self.display.setProperty("running", running)
         theme.repolish(self.display)
+        self.refresh_banner()
         self.refresh_today()
         self._update_display()
 
@@ -301,6 +336,13 @@ class TimerView(QWidget):
             return
         try:
             self._save_active_description()
+            # Never discount silently: ask about pending interruptions first.
+            resolve_pending(
+                self.services,
+                self._active.entry.id,
+                "Antes de detener y guardar la sesión, decidí qué hacer con este intervalo.",
+                parent=self,
+            )
             self.services.timer.stop()
         except Exception as exc:  # noqa: BLE001
             show_error(self, exc)
@@ -326,9 +368,73 @@ class TimerView(QWidget):
 
     def _beat(self) -> None:
         try:
-            self.services.timer.heartbeat()
+            beat = self.services.timer.heartbeat()
+            if beat is not None:
+                found = self.services.interruptions.check_heartbeat(beat.previous, beat.current)
+                if found is not None:
+                    self._on_interruption(found)
         except Exception:  # never interrupt the user for a missed heartbeat
             log.exception("Heartbeat failed")
+
+    # --- interruptions -----------------------------------------------------
+    def on_suspend(self) -> None:
+        """Windows is going to sleep: remember the exact moment and persist last-seen."""
+        self._suspended_at = self.services.clock.now()
+        self._beat()
+
+    def on_resume(self) -> None:
+        suspended_at, self._suspended_at = self._suspended_at, None
+        try:
+            if suspended_at is not None and self._active is not None:
+                found = self.services.interruptions.record_power_gap(suspended_at, self.services.clock.now())
+                if found is not None:
+                    self._on_interruption(found)
+        except Exception:
+            log.exception("Could not record power gap")
+        self._beat()  # also catches a gap if no suspend event was received
+        self.refresh_banner()
+
+    def _on_interruption(self, item) -> None:
+        self.refresh_banner()
+        self.interruption_detected.emit(
+            f"Posible interrupción de {format_hms(item.seconds)} "
+            f"({format_local_time(item.start_time)} – {format_local_time(item.end_time)}). "
+            "No se descontó: decidí en WorkTrack."
+        )
+
+    def refresh_banner(self) -> None:
+        pending = (
+            self.services.interruptions.pending_for_entry(self._active.entry.id) if self._active else []
+        )
+        self._banner_item = pending[0] if pending else None
+        if not pending:
+            self.banner.hide()
+            return
+        item = pending[0]
+        more = f"  (+{len(pending) - 1} más)" if len(pending) > 1 else ""
+        self.banner_text.setText(
+            f"<b>Posible interrupción</b> de {format_local_datetime(item.start_time)} a "
+            f"{format_local_datetime(item.end_time)} (<b>{format_hms(item.seconds)}</b>){more}. "
+            "Se sigue contando hasta que decidas."
+        )
+        self.banner.show()
+
+    def _decide(self, action: str) -> None:
+        item = self._banner_item
+        if item is None:
+            return
+        try:
+            if action == "keep":
+                self.services.interruptions.keep(item.id)
+            elif action == "discount":
+                self.services.interruptions.discount(item.id)
+            else:
+                InterruptionDialog(self.services, item, preselect="adjust", parent=self).exec()
+        except Exception as exc:  # noqa: BLE001
+            show_error(self, exc)
+        self.refresh_banner()
+        self._update_display()
+        self.signals.entries_changed.emit()
 
     def _update_display(self) -> None:
         if not self._active:

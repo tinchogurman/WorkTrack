@@ -132,8 +132,10 @@ class EntryDialog(QDialog):
         except Exception as exc:  # noqa: BLE001
             return self._show_error(user_message(exc))
         self.duration_label.setObjectName("OkLabel")
+        discounted = self.services.entries.discounted_seconds(self.entry_id, draft.start, draft.end)
+        extra = f"  ·  descontado por interrupciones: {format_hms(discounted)}" if discounted else ""
         self.duration_label.setText(
-            f"Duración resultante: {format_hms(seconds)}  ({format_decimal_hours(seconds)} h)"
+            f"Duración resultante: {format_hms(seconds)}  ({format_decimal_hours(seconds)} h){extra}"
         )
         self._repolish_label()
         self.save_button.setEnabled(True)

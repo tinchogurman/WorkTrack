@@ -127,6 +127,72 @@ def test_reports_invalid_range(window):
     assert "anterior" in rv.error.text()
 
 
+def run_awake(tv, clock, minutes):
+    """Normal operation: a heartbeat every 30 s."""
+    for _ in range(minutes * 2):
+        clock.advance(seconds=30)
+        tv._beat()
+
+
+def test_interruption_banner_and_decisions(window, services, project, clock):
+    window.signals.projects_changed.emit()
+    tv = window.timer_view
+    tv.task_combo.setEditText("ETL")
+    tv.start()
+    run_awake(tv, clock, 30)
+    assert not tv.banner.isVisibleTo(window)
+    clock.advance(hours=2)  # machine asleep, no heartbeats
+    notified = []
+    tv.interruption_detected.connect(notified.append)
+    tv._beat()
+    assert tv.banner.isVisibleTo(window) and "02:00:00" in tv.banner_text.text()
+    assert notified and "No se descontó" in notified[0]
+    tv._update_display()
+    assert tv.display.text() == "02:30:00"  # still counted
+    tv._decide("discount")
+    assert not tv.banner.isVisibleTo(window)
+    tv._update_display()
+    assert tv.display.text() == "00:30:00"
+
+
+def test_power_events_record_exact_gap(window, services, project, clock):
+    window.signals.projects_changed.emit()
+    tv = window.timer_view
+    tv.task_combo.setEditText("ETL")
+    tv.start()
+    run_awake(tv, clock, 10)
+    tv.on_suspend()
+    clock.advance(hours=1)
+    tv.on_resume()
+    items = services.interruptions.list_for_entry(services.timer.get_active().id)
+    assert len(items) == 1 and items[0].source == "power_event" and items[0].seconds == 3600
+
+
+def test_stop_asks_about_pending_and_closing_keeps_time(window, services, project, clock, monkeypatch):
+    from worktrack.ui.dialogs import interruption_dialog
+
+    window.signals.projects_changed.emit()
+    tv = window.timer_view
+    tv.task_combo.setEditText("ETL")
+    tv.start()
+    tv._beat()
+    clock.advance(hours=1)
+    tv._beat()
+    asked = []
+
+    def fake_exec(dialog):
+        asked.append(dialog.item.id)
+        dialog.reject()  # user closes the dialog
+        return 0
+
+    monkeypatch.setattr(interruption_dialog.InterruptionDialog, "exec", fake_exec)
+    tv.stop()
+    assert asked and not tv.is_running()
+    entry = services.entries.list_entries()[0].entry
+    assert entry.duration_seconds == 3600  # nothing discounted
+    assert services.interruptions.list_for_entry(entry.id)[0].status == "kept"
+
+
 def test_dashboard_empty(window):
     window.go_to(1)
     assert window.dashboard_view.kpi_total.value.text() == "00:00:00"
