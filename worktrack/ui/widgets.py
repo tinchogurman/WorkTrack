@@ -8,7 +8,7 @@ from PySide6.QtCore import QDate, QDateTime, Qt, QTime
 from PySide6.QtWidgets import QComboBox, QCompleter, QFrame, QLabel
 
 from worktrack.core.models import Project, Task
-from worktrack.core.timeutils import local_naive_to_utc, to_local
+from worktrack.core.timeutils import is_12h, local_naive_to_utc, to_local
 from worktrack.ui.icons import color_dot
 
 
@@ -86,6 +86,11 @@ class TaskCombo(QComboBox):
 
     def task_name(self) -> str:
         return self.currentText().strip()
+
+
+def qt_datetime_format() -> str:
+    """Display format for QDateTimeEdit following the 12/24 h preference."""
+    return "dd/MM/yyyy hh:mm:ss AP" if is_12h() else "dd/MM/yyyy HH:mm:ss"
 
 
 def utc_to_qdatetime(value: datetime) -> QDateTime:

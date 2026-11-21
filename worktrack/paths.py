@@ -38,3 +38,13 @@ def logs_dir() -> Path:
 
 def lock_path() -> Path:
     return data_dir() / "worktrack.lock"
+
+
+def settings_path() -> Path:
+    return data_dir() / "settings.json"
+
+
+def backups_dir() -> Path:
+    path = data_dir() / "backups"
+    path.mkdir(parents=True, exist_ok=True)
+    return path

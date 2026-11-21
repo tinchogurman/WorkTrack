@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 from worktrack.core.timeutils import format_hms, format_local_datetime, seconds_between
 from worktrack.services.recovery_service import RecoveryInfo, RecoveryService
 from worktrack.ui.errors import user_message
-from worktrack.ui.widgets import qdatetime_to_utc, section_title, utc_to_qdatetime
+from worktrack.ui.widgets import qdatetime_to_utc, qt_datetime_format, section_title, utc_to_qdatetime
 
 log = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ class RecoveryDialog(QDialog):
             self.group.addButton(opt, i)
 
         self.custom_edit = QDateTimeEdit(utc_to_qdatetime(info.last_seen))
-        self.custom_edit.setDisplayFormat("dd/MM/yyyy HH:mm:ss")
+        self.custom_edit.setDisplayFormat(qt_datetime_format())
         self.custom_edit.setCalendarPopup(True)
         self.custom_edit.setMinimumDateTime(utc_to_qdatetime(info.started_at))
         self.custom_edit.setMaximumDateTime(utc_to_qdatetime(info.now))

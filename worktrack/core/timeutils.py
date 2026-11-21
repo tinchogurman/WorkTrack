@@ -59,8 +59,29 @@ def format_local_date(value: datetime) -> str:
     return to_local(value).strftime("%d/%m/%Y")
 
 
+_clock_12h = False  # display preference (Settings); exports always use 24 h
+
+
+def set_time_format(fmt: str) -> None:
+    global _clock_12h
+    _clock_12h = fmt == "12h"
+
+
+def is_12h() -> bool:
+    return _clock_12h
+
+
+def format_clock(value: datetime) -> str:
+    """Wall-clock time of an (already local) datetime, honoring the 12/24 h preference."""
+    if not _clock_12h:
+        return f"{value.hour:02d}:{value.minute:02d}:{value.second:02d}"
+    hour = value.hour % 12 or 12
+    suffix = "a. m." if value.hour < 12 else "p. m."
+    return f"{hour:02d}:{value.minute:02d}:{value.second:02d} {suffix}"
+
+
 def format_local_time(value: datetime) -> str:
-    return to_local(value).strftime("%H:%M:%S")
+    return format_clock(to_local(value))
 
 
 def format_local_end_time(start: datetime, end: datetime) -> str:
@@ -71,4 +92,5 @@ def format_local_end_time(start: datetime, end: datetime) -> str:
 
 
 def format_local_datetime(value: datetime) -> str:
-    return to_local(value).strftime("%d/%m/%Y %H:%M:%S")
+    local = to_local(value)
+    return f"{local:%d/%m/%Y} {format_clock(local)}"

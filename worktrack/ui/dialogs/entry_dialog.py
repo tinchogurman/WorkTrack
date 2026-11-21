@@ -21,14 +21,17 @@ from worktrack.core.timeutils import format_decimal_hours, format_hms
 from worktrack.services.context import AppServices
 from worktrack.services.entry_service import LONG_SESSION_SECONDS, EntryDraft
 from worktrack.ui.errors import user_message
-from worktrack.ui.widgets import ProjectCombo, TaskCombo, qdatetime_to_utc, utc_to_qdatetime
-
-DT_FORMAT = "dd/MM/yyyy HH:mm:ss"
-
+from worktrack.ui.widgets import (
+    ProjectCombo,
+    TaskCombo,
+    qdatetime_to_utc,
+    qt_datetime_format,
+    utc_to_qdatetime,
+)
 
 def _datetime_edit() -> QDateTimeEdit:
     edit = QDateTimeEdit()
-    edit.setDisplayFormat(DT_FORMAT)
+    edit.setDisplayFormat(qt_datetime_format())
     edit.setCalendarPopup(True)
     return edit
 

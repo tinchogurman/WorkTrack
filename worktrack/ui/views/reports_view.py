@@ -26,7 +26,7 @@ from PySide6.QtWidgets import (
 )
 
 from worktrack.analytics.periods import Period, fmt_date
-from worktrack.core.timeutils import format_decimal_hours, format_hms
+from worktrack.core.timeutils import format_clock, format_decimal_hours, format_hms
 from worktrack.services.context import AppServices
 from worktrack.services.exporters import default_filename, export_csv, export_xlsx
 from worktrack.services.report_service import Report
@@ -273,7 +273,8 @@ class ReportsView(QWidget):
         ])
         fill(self.table_sessions, [
             [_item(d.start.strftime("%d/%m/%Y")), _item(d.project), _item(d.task),
-             _item(d.start.strftime("%d/%m/%Y %H:%M:%S")), _item(d.end.strftime("%d/%m/%Y %H:%M:%S")),
+             _item(f"{d.start:%d/%m/%Y} {format_clock(d.start)}"),
+             _item(f"{d.end:%d/%m/%Y} {format_clock(d.end)}"),
              _item(format_hms(d.duration_seconds), True),
              _item(format_decimal_hours(d.duration_seconds), True),
              _item(format_hms(d.in_period_seconds), True), _item(d.description)]
