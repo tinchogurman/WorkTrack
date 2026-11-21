@@ -4,6 +4,7 @@ on-screen preview and export to Excel or CSV."""
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
 
@@ -66,9 +67,16 @@ def _item(text: str, align_right: bool = False) -> QTableWidgetItem:
 
 
 class ReportsView(QWidget):
-    def __init__(self, services: AppServices, signals: AppSignals, parent=None) -> None:
+    def __init__(
+        self,
+        services: AppServices,
+        signals: AppSignals,
+        export_dir: Callable[[], str] | None = None,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self.services = services
+        self._configured_export_dir = export_dir or (lambda: "")
         self.report: Report | None = None
         self._dirty = True
         self._last_dir: Path | None = None
@@ -285,6 +293,9 @@ class ReportsView(QWidget):
     def _default_dir(self) -> Path:
         if self._last_dir and self._last_dir.is_dir():
             return self._last_dir
+        configured = self._configured_export_dir()
+        if configured and Path(configured).is_dir():
+            return Path(configured)
         docs = QStandardPaths.writableLocation(QStandardPaths.DocumentsLocation)
         return Path(docs) if docs else Path.home()
 

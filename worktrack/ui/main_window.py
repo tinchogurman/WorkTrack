@@ -22,8 +22,10 @@ from PySide6.QtWidgets import (
 
 from worktrack import APP_NAME
 from worktrack.services.context import AppServices
+from worktrack.paths import settings_path
 from worktrack.settings import Settings, SettingsStore
 from worktrack.ui.tray import TrayIcon
+from worktrack.ui.views.settings_view import SettingsView
 from worktrack.ui.icons import app_icon
 from worktrack.ui.signals import AppSignals
 from worktrack.ui.views.dashboard_view import DashboardView
@@ -42,7 +44,7 @@ SECTIONS = [
     ("Projects", True, None),
     ("History", True, None),
     ("Reports", True, None),
-    ("Settings", False, 3),
+    ("Settings", True, None),
 ]
 
 
@@ -102,13 +104,23 @@ class MainWindow(QMainWindow):
         self.projects_view = ProjectsView(services, self.signals)
         self.history_view = HistoryView(services, self.signals)
         self.dashboard_view = DashboardView(services, self.signals)
-        self.reports_view = ReportsView(services, self.signals)
+        self.reports_view = ReportsView(services, self.signals, export_dir=lambda: self.settings.export_dir)
+        tray_ok = use_tray and QSystemTrayIcon.isSystemTrayAvailable()
+        self.settings_view = SettingsView(
+            services,
+            self.signals,
+            self.settings,
+            settings_store or SettingsStore(settings_path()),
+            tray_available=tray_ok,
+        )
+        self.settings_view.settings_changed.connect(self.apply_settings)
         built = {
             "Timer": self.timer_view,
             "Dashboard": self.dashboard_view,
             "Projects": self.projects_view,
             "History": self.history_view,
             "Reports": self.reports_view,
+            "Settings": self.settings_view,
         }
 
         for i, (name, available, phase) in enumerate(SECTIONS):
@@ -132,7 +144,7 @@ class MainWindow(QMainWindow):
         QShortcut(QKeySequence("Ctrl+Space"), self, self.timer_view.toggle)
 
         self.tray: TrayIcon | None = None
-        if use_tray and QSystemTrayIcon.isSystemTrayAvailable():
+        if tray_ok:
             self.tray = TrayIcon(self)
             self.tray.show()
             self.timer_view.interruption_detected.connect(self._notify_interruption)
@@ -182,6 +194,13 @@ class MainWindow(QMainWindow):
         """Stop every periodic timer (before the database connection is closed)."""
         for timer in self.findChildren(QTimer):
             timer.stop()
+
+    def restart_timers(self) -> None:
+        """Resume periodic work after shutdown() (e.g. once a backup was restored)."""
+        self.timer_view._day_watch.start()
+        self.dashboard_view._live.start()
+        self.timer_view.load_state()  # restarts the stopwatch/heartbeat if a session runs
+        self._on_session_state()
 
     def go_to(self, index: int) -> None:
         if SECTIONS[index][1]:

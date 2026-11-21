@@ -132,3 +132,23 @@ class RecoveryDialog(QDialog):
         log.info("Recovery dialog dismissed; session left active")
         self.choice = "dismissed"
         super().reject()
+
+
+def run_recovery(services, parent: QWidget | None = None) -> str | None:
+    """If a session was left open (crash, or a restored backup), ask what to do.
+
+    Returns the choice, or None when there was nothing to recover.
+    """
+    from worktrack.ui.dialogs.interruption_dialog import resolve_pending
+
+    info = services.recovery.check()
+    if info is None:
+        return None
+    entry_id = info.view.entry.id
+    dialog = RecoveryDialog(services.recovery, info, parent)
+    dialog.exec()
+    log.info("Recovery choice: %s", dialog.choice)
+    if dialog.choice and dialog.choice.startswith("finish"):
+        # The session is closed now: settle interruptions detected before it stopped.
+        resolve_pending(services, entry_id, "La sesión recuperada tenía un intervalo sin resolver.", parent)
+    return dialog.choice

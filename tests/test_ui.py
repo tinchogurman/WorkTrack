@@ -54,13 +54,11 @@ def test_main_window_sections(window):
     assert window.nav.count() == len(SECTIONS) == 6
     names = [window.nav.item(i).text() for i in range(window.nav.count())]
     assert names == ["Timer", "Dashboard", "Projects", "History", "Reports", "Settings"]
-    assert not (window.nav.item(5).flags() & Qt.ItemIsEnabled)  # Settings: phase 3
-    window.go_to(3)
-    assert window.stack.currentWidget() is window.history_view
-    window.go_to(5)  # disabled: ignored
-    assert window.stack.currentWidget() is window.history_view
-    window.go_to(1)
-    assert window.stack.currentWidget() is window.dashboard_view
+    assert all(window.nav.item(i).flags() & Qt.ItemIsEnabled for i in range(6))
+    for index, view in enumerate([window.timer_view, window.dashboard_view, window.projects_view,
+                                  window.history_view, window.reports_view, window.settings_view]):
+        window.go_to(index)
+        assert window.stack.currentWidget() is view
 
 
 def test_dashboard_view_matches_records(window, services, project, other_project, clock):
@@ -254,6 +252,77 @@ def test_exit_with_confirmation_cancel_keeps_running(tray_window, services, proj
     w.timer_view.start()
     w.quit_from_tray()
     assert services.timer.get_active() is not None and w.isVisible()
+
+
+def test_settings_saved_and_applied(window, services, project, clock):
+    import json
+
+    from worktrack.core import timeutils
+    from worktrack.paths import settings_path
+    from worktrack.services.entry_service import EntryDraft
+
+    sv = window.settings_view
+    now = clock.now()
+    services.entries.add_manual(EntryDraft(project.id, "T", now - timedelta(hours=3), now - timedelta(hours=2)))
+    try:
+        sv.confirm_exit.setChecked(False)
+        sv.time_format.setCurrentIndex(sv.time_format.findData("12h"))
+        saved = json.loads(settings_path().read_text(encoding="utf-8"))
+        assert saved["confirm_exit_with_active"] is False and saved["time_format"] == "12h"
+        assert window.settings.confirm_exit_with_active is False
+        hv = window.history_view
+        hv.period_picker.set_preset("all")
+        start_text = hv.model.item(0, 3).text()
+        assert "a. m." in start_text or "p. m." in start_text
+        assert "Cambios guardados" in sv.saved_label.text()
+    finally:
+        timeutils.set_time_format("24h")
+
+
+def test_settings_export_dir_used_by_reports(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    target = tmp_path / "mis_reportes"
+    target.mkdir()
+    monkeypatch.setattr(QFileDialog, "getExistingDirectory", staticmethod(lambda *a, **k: str(target)))
+    window.settings_view._choose_export_dir()
+    assert window.settings.export_dir == str(target)
+    assert window.reports_view._default_dir() == target
+    window.settings_view._reset_export_dir()
+    assert window.settings.export_dir == ""
+
+
+def test_settings_backup_and_restore_from_ui(window, services, project, clock, monkeypatch, no_modal_boxes):
+    from worktrack.services.entry_service import EntryDraft
+    from worktrack.ui.views import settings_view
+
+    now = clock.now()
+    services.entries.add_manual(EntryDraft(project.id, "Antes", now - timedelta(hours=3), now - timedelta(hours=2)))
+    sv = window.settings_view
+    sv.create_backup()
+    assert sv.backup_table.rowCount() == 1
+    services.entries.add_manual(EntryDraft(project.id, "Después", now - timedelta(hours=1), now))
+    window.signals.entries_changed.emit()
+
+    monkeypatch.setattr(settings_view, "confirm", lambda *a, **k: True)
+    sv.backup_table.selectRow(0)
+    sv.restore_selected()
+    assert [v.task_name for v in services.entries.list_entries()] == ["Antes"]
+    window.history_view.period_picker.set_preset("all")
+    assert window.history_view.model.rowCount() == 1  # views refreshed after restore
+    names = [sv.backup_table.item(r, 0).text() for r in range(sv.backup_table.rowCount())]
+    assert any(n.startswith("pre-restore_") for n in names)
+    assert any("restaurado" in text for _, text in no_modal_boxes)
+
+
+def test_settings_restore_blocked_with_active_session(window, services, project, no_modal_boxes):
+    sv = window.settings_view
+    sv.create_backup()
+    services.timer.start(project.id, "En curso")
+    sv.backup_table.selectRow(0)
+    sv.restore_selected()
+    assert any("sesión en curso" in text for _, text in no_modal_boxes)
+    assert services.timer.get_active() is not None
 
 
 def test_dashboard_empty(window):

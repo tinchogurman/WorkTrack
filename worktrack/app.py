@@ -16,8 +16,7 @@ from worktrack.logging_setup import setup_logging
 from worktrack.paths import db_path, lock_path, logs_dir, settings_path
 from worktrack.services.context import AppServices
 from worktrack.settings import SettingsStore
-from worktrack.ui.dialogs.interruption_dialog import resolve_pending
-from worktrack.ui.dialogs.recovery_dialog import RecoveryDialog
+from worktrack.ui.dialogs.recovery_dialog import run_recovery
 from worktrack.ui.errors import GENERIC, user_message
 from worktrack.ui.icons import app_icon
 from worktrack.ui.main_window import MainWindow
@@ -37,19 +36,6 @@ def _install_excepthook() -> None:
             QMessageBox.critical(None, APP_NAME, GENERIC)
 
     sys.excepthook = hook
-
-
-def _recover(services: AppServices) -> None:
-    info = services.recovery.check()
-    if info is None:
-        return
-    entry_id = info.view.entry.id
-    dialog = RecoveryDialog(services.recovery, info)
-    dialog.exec()
-    log.info("Recovery choice: %s", dialog.choice)
-    if dialog.choice and dialog.choice.startswith("finish"):
-        # The session is closed now: settle interruptions detected before the crash.
-        resolve_pending(services, entry_id, "La sesión recuperada tenía un intervalo sin resolver.")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -95,7 +81,7 @@ def main(argv: list[str] | None = None) -> int:
 
     window = None
     try:
-        _recover(services)
+        run_recovery(services)
 
         window = MainWindow(services, settings, store)
         power = install_power_monitor(app)
