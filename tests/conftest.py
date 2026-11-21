@@ -33,3 +33,22 @@ def conn(db_file):
 @pytest.fixture
 def clock():
     return FakeClock(T0)
+
+
+@pytest.fixture
+def services(db_file, clock):
+    from worktrack.services.context import AppServices
+
+    svc = AppServices.open(db_file, clock)
+    yield svc
+    svc.close()
+
+
+@pytest.fixture
+def project(services):
+    return services.projects.create_project("Data Engineering", "#22C55E")
+
+
+@pytest.fixture
+def other_project(services):
+    return services.projects.create_project("Desarrollo Python", "#3B82F6")
