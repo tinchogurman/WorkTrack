@@ -331,18 +331,19 @@ class TimerView(QWidget):
         self.signals.entries_changed.emit()
         self.signals.session_state_changed.emit()
 
-    def stop(self) -> None:
+    def stop(self, ask_interruptions: bool = True) -> None:
         if not self._active:
             return
         try:
             self._save_active_description()
-            # Never discount silently: ask about pending interruptions first.
-            resolve_pending(
-                self.services,
-                self._active.entry.id,
-                "Antes de detener y guardar la sesión, decidí qué hacer con este intervalo.",
-                parent=self,
-            )
+            if ask_interruptions:
+                # Never discount silently: ask about pending interruptions first.
+                resolve_pending(
+                    self.services,
+                    self._active.entry.id,
+                    "Antes de detener y guardar la sesión, decidí qué hacer con este intervalo.",
+                    parent=self,
+                )
             self.services.timer.stop()
         except Exception as exc:  # noqa: BLE001
             show_error(self, exc)

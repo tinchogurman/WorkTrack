@@ -193,6 +193,69 @@ def test_stop_asks_about_pending_and_closing_keeps_time(window, services, projec
     assert services.interruptions.list_for_entry(entry.id)[0].status == "kept"
 
 
+@pytest.fixture
+def tray_window(qtbot, services, monkeypatch):
+    from PySide6.QtWidgets import QSystemTrayIcon
+
+    monkeypatch.setattr(QSystemTrayIcon, "isSystemTrayAvailable", staticmethod(lambda: True))
+    monkeypatch.setattr(QSystemTrayIcon, "showMessage", lambda *a, **k: None)
+    w = MainWindow(services)
+    qtbot.addWidget(w)
+    w.show()
+    yield w
+    w.shutdown()
+    w.tray.hide()
+
+
+def test_tray_reflects_session_and_stops_it(tray_window, services, project, clock):
+    w = tray_window
+    assert w.tray is not None
+    assert "sin sesión activa" in w.tray.toolTip() and not w.tray.stop_action.isEnabled()
+    w.signals.projects_changed.emit()
+    w.timer_view.task_combo.setEditText("ETL")
+    w.timer_view.start()
+    clock.advance(seconds=5)
+    w.timer_view._update_display()
+    assert "▶ 00:00:05" in w.tray.toolTip() and w.tray.stop_action.isEnabled()
+    assert "ETL" in w.tray.stop_action.text()
+    w.stop_from_tray()
+    assert not w.timer_view.is_running()
+    assert "sin sesión activa" in w.tray.toolTip()
+
+
+def test_minimize_goes_to_tray(qtbot, tray_window):
+    w = tray_window
+    w.showMinimized()
+    qtbot.waitUntil(lambda: not w.isVisible(), timeout=2000)
+    w.show_from_tray()
+    assert w.isVisible() and not w.isMinimized()
+    w.settings.minimize_to_tray = False
+    w.showMinimized()
+    qtbot.wait(50)
+    assert w.isVisible()  # stays in the taskbar
+
+
+def test_exit_without_confirmation_stops_and_saves(tray_window, services, project, clock):
+    w = tray_window
+    w.settings.confirm_exit_with_active = False
+    w.signals.projects_changed.emit()
+    w.timer_view.task_combo.setEditText("ETL")
+    w.timer_view.start()
+    clock.advance(minutes=3)
+    w.quit_from_tray()
+    assert services.timer.get_active() is None
+    assert services.entries.list_entries()[0].entry.duration_seconds == 180
+
+
+def test_exit_with_confirmation_cancel_keeps_running(tray_window, services, project):
+    w = tray_window  # the fake QMessageBox.exec behaves as "Cancel"
+    w.signals.projects_changed.emit()
+    w.timer_view.task_combo.setEditText("ETL")
+    w.timer_view.start()
+    w.quit_from_tray()
+    assert services.timer.get_active() is not None and w.isVisible()
+
+
 def test_dashboard_empty(window):
     window.go_to(1)
     assert window.dashboard_view.kpi_total.value.text() == "00:00:00"
