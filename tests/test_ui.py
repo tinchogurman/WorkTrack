@@ -166,6 +166,35 @@ def test_history_blocks_editing_active_session(window, services, project, no_mod
     assert any("en curso" in text for _, text in no_modal_boxes)
 
 
+def test_history_filters(window, services, project, other_project, clock):
+    from worktrack.services.entry_service import EntryDraft
+
+    now = clock.now()
+    services.entries.add_manual(EntryDraft(project.id, "A", now - timedelta(hours=3), now - timedelta(hours=2)))
+    services.entries.add_manual(EntryDraft(other_project.id, "B", now - timedelta(hours=2), now - timedelta(hours=1)))
+    services.entries.add_manual(EntryDraft(project.id, "Old", now - timedelta(days=90), now - timedelta(days=90) + timedelta(hours=1)))
+    window.signals.projects_changed.emit()
+    hv = window.history_view
+    assert hv.period_picker.preset_key() == "last30"
+    assert hv.model.rowCount() == 2
+    hv.period_picker.set_preset("all")
+    assert hv.model.rowCount() == 3
+    hv.project_filter.project_combo.setCurrentIndex(hv.project_filter.project_combo.findData(project.id))
+    assert hv.model.rowCount() == 2
+    hv.project_filter.task_combo.setCurrentIndex(hv.project_filter.task_combo.findText("Old"))
+    assert hv.model.rowCount() == 1
+    hv.clear_filters()
+    assert hv.model.rowCount() == 3
+    assert "3 sesiones" in hv.summary.text()
+
+
+def test_history_custom_range_validation(window):
+    hv = window.history_view
+    hv.period_picker.set_preset("custom")
+    hv.period_picker.to_edit.setDate(hv.period_picker.from_edit.date().addDays(-1))
+    assert hv.filter_error.isVisible() or "anterior" in hv.filter_error.text()
+
+
 def test_recovery_dialog_finish_at_last_seen(qtbot, services, project, db_file, clock):
     services.timer.start(project.id, "ETL")
     clock.advance(minutes=10)

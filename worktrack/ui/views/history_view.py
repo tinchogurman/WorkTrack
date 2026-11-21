@@ -1,6 +1,7 @@
-"""History: sortable table of sessions; add, edit and delete (with confirmation).
+"""History: sortable, filterable table of sessions; add, edit and delete.
 
-Filters by date/project/task arrive in phase 2.
+The date filter includes every session that overlaps the period (whole
+records: a session from 23:00 to 01:00 appears when filtering either day).
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QHeaderView,
+    QLabel,
     QPushButton,
     QTableView,
     QVBoxLayout,
@@ -19,11 +21,18 @@ from PySide6.QtWidgets import (
 
 from worktrack.core.errors import ValidationError
 from worktrack.core.models import EntryView
-from worktrack.core.timeutils import format_hms, format_local_date, format_local_time, to_db
+from worktrack.core.timeutils import (
+    format_decimal_hours,
+    format_hms,
+    format_local_date,
+    format_local_time,
+    to_db,
+)
 from worktrack.services.context import AppServices
 from worktrack.ui import theme
 from worktrack.ui.dialogs.entry_dialog import EntryDialog
 from worktrack.ui.errors import confirm, show_error
+from worktrack.ui.filters import PeriodPicker, ProjectTaskFilter
 from worktrack.ui.icons import color_dot
 from worktrack.ui.signals import AppSignals
 from worktrack.ui.widgets import muted, page_title
@@ -48,6 +57,7 @@ class HistoryView(QWidget):
         self._build()
         signals.entries_changed.connect(self.refresh)
         signals.session_state_changed.connect(self.refresh)
+        signals.projects_changed.connect(self._on_projects_changed)
         self.refresh()
 
     def _build(self) -> None:
@@ -74,6 +84,28 @@ class HistoryView(QWidget):
         self.summary = muted()
         bar.addWidget(self.summary)
         root.addLayout(bar)
+
+        filters = QHBoxLayout()
+        self.period_picker = PeriodPicker(
+            self.services.analytics.today,
+            ["all", "today", "week", "month", "last30", "year", "custom"],
+            default="last30",
+        )
+        self.period_picker.changed.connect(self.refresh)
+        self.project_filter = ProjectTaskFilter(self.services)
+        self.project_filter.changed.connect(self.refresh)
+        clear_btn = QPushButton("Limpiar filtros")
+        clear_btn.clicked.connect(self.clear_filters)
+        filters.addWidget(self.period_picker)
+        filters.addSpacing(12)
+        filters.addWidget(self.project_filter)
+        filters.addWidget(clear_btn)
+        filters.addStretch()
+        root.addLayout(filters)
+        self.filter_error = QLabel()
+        self.filter_error.setObjectName("ErrorLabel")
+        self.filter_error.hide()
+        root.addWidget(self.filter_error)
 
         self.model = QStandardItemModel(0, len(COLUMNS), self)
         self.model.setHorizontalHeaderLabels(COLUMNS)
@@ -105,10 +137,35 @@ class HistoryView(QWidget):
         QShortcut(QKeySequence.New, self, self.add_entry, context=Qt.WidgetWithChildrenShortcut)
 
     # --- data --------------------------------------------------------------
+    def clear_filters(self) -> None:
+        for widget in (self.project_filter, self.period_picker):
+            widget.blockSignals(True)
+        self.project_filter.clear()
+        self.period_picker.set_preset("all")
+        for widget in (self.project_filter, self.period_picker):
+            widget.blockSignals(False)
+        self.refresh()
+
+    def _on_projects_changed(self) -> None:
+        self.project_filter.blockSignals(True)
+        self.project_filter.reload()
+        self.project_filter.blockSignals(False)
+        self.refresh()
+
     def refresh(self) -> None:
         selected = self.selected_id()
+        self.period_picker.refresh_relative()  # "Hoy" stays correct after midnight
         try:
-            views = self.services.entries.list_entries()
+            period = self.period_picker.period()
+        except ValueError as exc:
+            self.filter_error.setText(str(exc))
+            self.filter_error.show()
+            return
+        self.filter_error.hide()
+        try:
+            views = self.services.entries.search(
+                period, self.project_filter.project_id(), self.project_filter.task_id()
+            )
         except Exception as exc:  # noqa: BLE001
             show_error(self, exc)
             return
@@ -119,7 +176,13 @@ class HistoryView(QWidget):
             self.model.appendRow(self._row(view))
             total += view.entry.duration_seconds or 0
         self.table.setSortingEnabled(True)
-        self.summary.setText(f"{len(views)} sesiones  ·  total registrado {format_hms(total)}")
+        self.summary.setText(
+            f"{len(views)} sesiones  ·  {format_hms(total)} ({format_decimal_hours(total)} h)"
+        )
+        self.summary.setToolTip(
+            "Suma de las sesiones listadas completas (las que cruzan el borde del filtro "
+            "cuentan enteras; los totales prorrateados están en Dashboard y Reports)."
+        )
         if selected is not None:
             self._select(selected)
         self._update_buttons()
