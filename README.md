@@ -3,8 +3,9 @@
 Time tracker personal, local y gratuito para Windows (estilo Toggl/Clockify).
 Sin servicios externos: todo queda en una base SQLite en tu equipo.
 
-> Estado: **Fase 1 (MVP)** — Timer, proyectos y tareas, historial, recuperación ante cierres inesperados.
-> Dashboard y Reports llegan en la Fase 2; bandeja del sistema, Settings, backups y `.exe` en la Fase 3.
+> Estado: **Fase 2 (Analytics)** — Timer, proyectos y tareas, historial con filtros, recuperación ante
+> cierres inesperados, Dashboard y Reports con exportación a Excel/CSV.
+> Bandeja del sistema, Settings, backups, detección de suspensión y `.exe` llegan en la Fase 3.
 > La especificación completa está en [SPEC.md](SPEC.md).
 
 ## Requisitos
@@ -44,6 +45,20 @@ Se usa `PySide6-Essentials` (QtCore/QtGui/QtWidgets), no el paquete `PySide6` co
 **Projects**: crear, editar, color, archivar/desarchivar proyectos y tareas. Un proyecto o tarea con sesiones no se puede eliminar, solo archivar; los archivados no se ofrecen en Timer pero su historial se conserva.
 
 **History**: tabla ordenable (clic en el encabezado). `+ Agregar sesión` (`Ctrl+N`) para cargar una sesión olvidada; doble clic / `Enter` para editar; `Supr` para eliminar (con confirmación). El diálogo muestra la duración resultante antes de guardar.
+Filtros por período (Todo, Hoy, Esta semana, Este mes, Últimos 30 días, Este año o rango personalizado), proyecto y tarea.
+El filtro de fechas muestra las sesiones que se *solapan* con el rango: una sesión de 23:00 a 01:00 aparece filtrando cualquiera de los dos días. Si una sesión termina otro día, la hora de fin se marca `(+1)`.
+
+**Dashboard**: horas de hoy, esta semana y este mes; para el período elegido, total, sesiones, promedio diario (sobre días con actividad) y proyecto con mayor dedicación. Gráficos de horas por día, por semana, evolución de 12 meses y distribución por proyecto y por tarea (pasá el mouse sobre una barra para ver el detalle). La sesión en curso se cuenta hasta el momento actual.
+
+**Reports**: reporte por día, semana, mes o rango personalizado, filtrable por proyecto y tarea. Muestra total (HH:MM:SS y horas decimales), sesiones, días con actividad y desgloses por proyecto, tarea, día, semana y el detalle de sesiones. Solo incluye sesiones finalizadas.
+- **Exportar Excel** (`.xlsx`): hojas Resumen, Por proyecto, Por tarea, Por día, Por semana y Sesiones. Las duraciones son tiempos de Excel (`[h]:mm:ss`) y las horas decimales son números, así se pueden sumar en la planilla.
+- **Exportar CSV**: el detalle de sesiones, con separador `;`, coma decimal (`1,50`) y UTF-8 con BOM (se abre directo en Excel en español).
+
+### Semanas, días y sesiones que cruzan la medianoche
+
+- Las semanas van de **lunes a domingo**.
+- El historial guarda cada sesión como un único registro, pero los totales por día, semana y mes (Dashboard y Reports) **reparten** la duración entre los días que toca, cortando en la medianoche **local**. Ej.: 23:00–01:00 suma 1 h a cada día.
+- En Reports, la pestaña/hoja *Sesiones* muestra cada sesión completa y la columna *En el período* indica la parte que cae dentro del rango, para que el detalle cuadre con los totales.
 
 **Atajos**: `Ctrl+1…6` cambia de sección, `Ctrl+Espacio` inicia/detiene.
 
@@ -95,8 +110,10 @@ worktrack/
 ├── core/               modelos, errores de dominio, reloj inyectable, utilidades de tiempo
 ├── db/                 conexión (foreign_keys=ON, WAL), esquema, migraciones, traducción de errores
 ├── repositories/       SQL parametrizado, sin reglas de negocio
-├── services/           reglas de negocio (sin Qt): proyectos, timer, historial, recuperación
-└── ui/                 PySide6: tema, ventana principal, vistas y diálogos
+├── analytics/          prorrateo por día local, períodos, segmentos y agregaciones (pandas)
+├── services/           reglas de negocio (sin Qt): proyectos, timer, historial, recuperación,
+│                       dashboard, reportes y exportación (openpyxl / csv)
+└── ui/                 PySide6: tema, ventana principal, vistas, diálogos, gráficos (PyQtGraph)
 tests/                  pytest + pytest-qt
 ```
 
@@ -112,6 +129,11 @@ suspensiones (Fase 3) y para una futura tabla de pausas sin cambiar el esquema.
 
 Los errores de integridad de SQLite se traducen a mensajes claros (`worktrack/db/errors.py`); la interfaz nunca
 muestra errores crudos y los inesperados se registran en el log.
+
+**Analytics**: `analytics/proration.py` corta cada sesión en la medianoche local (aritmética en UTC, correcta
+también con horario de verano) y reparte el tiempo trabajado proporcionalmente con redondeo de mayor resto, de
+modo que la suma por días es siempre exacta. Los servicios reciben la zona horaria (`tz=None` = la del sistema);
+las pruebas usan zonas explícitas.
 
 **Agregar una migración**: añadir el script a `MIGRATIONS` en `worktrack/db/migrations.py`; se aplica en una
 transacción al abrir la base.
