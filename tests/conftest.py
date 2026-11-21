@@ -5,6 +5,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")  # UI tests run headless
 
 from datetime import datetime, timezone  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
 
 import pytest
 
@@ -39,11 +40,20 @@ def clock():
     return FakeClock(T0)
 
 
+BA = ZoneInfo("America/Argentina/Buenos_Aires")
+
+
 @pytest.fixture
-def services(db_file, clock):
+def tz():
+    """Explicit time zone so local-day logic does not depend on the machine."""
+    return BA
+
+
+@pytest.fixture
+def services(db_file, clock, tz):
     from worktrack.services.context import AppServices
 
-    svc = AppServices.open(db_file, clock)
+    svc = AppServices.open(db_file, clock, tz)
     yield svc
     svc.close()
 

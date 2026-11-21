@@ -10,8 +10,9 @@ from __future__ import annotations
 import logging
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone, tzinfo
 
+from worktrack.analytics.periods import Period
 from worktrack.core.clock import Clock
 from worktrack.core.errors import NotFoundError, OverlapError, TaskProjectMismatchError, ValidationError
 from worktrack.core.models import EntryView, TimeEntry
@@ -24,6 +25,10 @@ from worktrack.services.project_service import ProjectService, clean_name, clean
 log = logging.getLogger(__name__)
 
 LONG_SESSION_SECONDS = 12 * 3600  # UI asks for confirmation above this
+ALL_TIME = (
+    datetime(1970, 1, 1, tzinfo=timezone.utc),
+    datetime(9999, 12, 31, tzinfo=timezone.utc),
+)
 
 
 @dataclass(frozen=True)
@@ -42,10 +47,13 @@ def describe_entry(view: EntryView) -> str:
 
 
 class EntryService:
-    def __init__(self, conn: sqlite3.Connection, clock: Clock, projects: ProjectService) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, clock: Clock, projects: ProjectService, tz: tzinfo | None = None
+    ) -> None:
         self.conn = conn
         self.clock = clock
         self.projects = projects
+        self.tz = tz
         self.entries = EntryRepository(conn)
 
     # --- reads -------------------------------------------------------------
@@ -53,6 +61,22 @@ class EntryService:
         self, start_from: datetime | None = None, start_before: datetime | None = None
     ) -> list[EntryView]:
         return self.entries.list_views(start_from, start_before)
+
+    def search(
+        self,
+        period: Period | None = None,
+        project_id: int | None = None,
+        task_id: int | None = None,
+    ) -> list[EntryView]:
+        """History filter. Sessions that overlap the period are included whole
+        (a session from 23:00 to 01:00 shows up when filtering either day)."""
+        if period is None:
+            start, end = ALL_TIME
+        else:
+            start, end = period.bounds(self.tz)
+        return self.entries.list_views_in_range(
+            start, end, self.clock.now(), project_id=project_id, task_id=task_id
+        )
 
     def get_view(self, entry_id: int) -> EntryView:
         view = self.entries.get_view(entry_id)

@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from datetime import tzinfo
 from pathlib import Path
 
 from worktrack.core.clock import Clock, SystemClock
 from worktrack.db.connection import connect
 from worktrack.db.migrations import migrate
+from worktrack.services.analytics_service import AnalyticsService
 from worktrack.services.entry_service import EntryService
 from worktrack.services.project_service import ProjectService
 from worktrack.services.recovery_service import RecoveryService
+from worktrack.services.report_service import ReportService
 from worktrack.services.timer_service import TimerService
 
 
@@ -23,9 +26,14 @@ class AppServices:
     timer: TimerService
     entries: EntryService
     recovery: RecoveryService
+    analytics: AnalyticsService
+    reports: ReportService
+    tz: tzinfo | None = None  # None = operating system local time zone
 
     @classmethod
-    def open(cls, db_file: Path | str, clock: Clock | None = None) -> "AppServices":
+    def open(
+        cls, db_file: Path | str, clock: Clock | None = None, tz: tzinfo | None = None
+    ) -> "AppServices":
         conn = connect(db_file)
         try:
             migrate(conn)
@@ -40,8 +48,11 @@ class AppServices:
             clock=clock,
             projects=projects,
             timer=timer,
-            entries=EntryService(conn, clock, projects),
+            entries=EntryService(conn, clock, projects, tz),
             recovery=RecoveryService(timer),
+            analytics=AnalyticsService(conn, clock, tz),
+            reports=ReportService(conn, clock, tz),
+            tz=tz,
         )
 
     def close(self) -> None:

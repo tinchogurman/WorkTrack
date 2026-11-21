@@ -74,6 +74,33 @@ class EntryRepository:
         a, b = _db(start_from), _db(start_before)
         return [_to_view(r) for r in self.conn.execute(sql, (a, a, b, b))]
 
+    def list_views_in_range(
+        self,
+        start: datetime,
+        end: datetime,
+        now: datetime,
+        *,
+        project_id: int | None = None,
+        task_id: int | None = None,
+        include_active: bool = True,
+    ) -> list[EntryView]:
+        """Sessions that intersect [start, end) (active ones occupy [start, now]).
+
+        A session crossing a range boundary is included (whole record).
+        """
+        sql = _VIEW_SQL + (
+            " WHERE e.start_time < ?"
+            " AND (COALESCE(e.end_time, ?) > ? OR e.start_time >= ?)"
+            " AND (? IS NULL OR e.project_id = ?)"
+            " AND (? IS NULL OR e.task_id = ?)"
+        )
+        if not include_active:
+            sql += " AND e.end_time IS NOT NULL"
+        sql += " ORDER BY e.start_time DESC, e.id DESC"
+        s, e, n = to_db(start), to_db(end), to_db(now)
+        params = (e, n, s, s, project_id, project_id, task_id, task_id)
+        return [_to_view(r) for r in self.conn.execute(sql, params)]
+
     def find_overlapping(
         self, start: datetime, end: datetime, now: datetime, exclude_id: int | None = None
     ) -> list[EntryView]:
