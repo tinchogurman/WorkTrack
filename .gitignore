@@ -17,6 +17,13 @@ build/
 dist/
 
 # Data: never commit databases, logs, backups or exports
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+settings.json
+*.lock
 *.db
 *.db-wal
 *.db-shm

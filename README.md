@@ -1,7 +1,38 @@
 # WorkTrack
 
+[![Windows checks and build](https://github.com/tinchogurman/WorkTrack/actions/workflows/windows.yml/badge.svg)](https://github.com/tinchogurman/WorkTrack/actions/workflows/windows.yml)
+
 Time tracker personal, local y gratuito para Windows (estilo Toggl/Clockify).
 Sin servicios externos: todo queda en una base SQLite en tu equipo.
+
+**Python · PySide6 · SQLite · pandas · PyQtGraph · pytest**
+
+![Dashboard de WorkTrack con datos ficticios](docs/images/dashboard.png)
+
+## Descargar y usar
+
+1. Abrí [la última versión](https://github.com/tinchogurman/WorkTrack/releases/latest) y descargá `WorkTrack-Windows.zip`.
+2. Extraé **toda la carpeta** y ejecutá `WorkTrack.exe`. No necesitás Python ni una cuenta.
+3. Creá un proyecto y una tarea; iniciá el cronómetro desde Timer.
+
+Los registros se guardan en `%APPDATA%\WorkTrack`, separados de la aplicación. Las versiones de escritorio
+se distribuyen sin firma digital. Cada descarga incluye `SHA256SUMS.txt` para verificar su integridad.
+
+## Qué resuelve
+
+- Registro de sesiones por proyecto y tarea, con historial editable y prevención de superposiciones.
+- Dashboard con totales y gráficos; reportes exportables a Excel y CSV.
+- Recuperación ante cierres inesperados y revisión de intervalos de suspensión.
+- Bandeja del sistema, preferencias y copias de seguridad con restauración validada.
+- Datos locales: sin cuentas, telemetría ni servicios de red propios de la aplicación.
+
+### Privacidad de esta demostración
+
+Las capturas contienen únicamente proyectos y sesiones ficticios generados con `tools/render_demo.py`
+en una carpeta temporal. El repositorio no contiene bases de datos de uso personal, logs, backups,
+exportaciones ni preferencias del usuario. El historial publicado usa el correo privado de GitHub.
+Si compartís tus propios reportes o copias de seguridad, revisá su contenido: pueden incluir nombres de
+proyectos, descripciones y horarios de trabajo.
 
 > Estado: **Fases 1, 2 y 3 completas** — Timer, proyectos y tareas, historial con filtros, recuperación ante
 > cierres inesperados, detección de suspensión, Dashboard, Reports con exportación a Excel/CSV, bandeja del
@@ -17,7 +48,7 @@ Sin servicios externos: todo queda en una base SQLite en tu equipo.
 ## Instalación
 
 ```powershell
-git clone <repo> WorkTrack
+git clone https://github.com/tinchogurman/WorkTrack.git
 cd WorkTrack
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
@@ -150,6 +181,8 @@ y se muestran en la hora local. La variable de entorno `WORKTRACK_DATA_DIR` perm
 ```
 
 Las pruebas de interfaz corren sin ventana (`QT_QPA_PLATFORM=offscreen`) y nunca tocan `%APPDATA%`.
+GitHub Actions ejecuta las pruebas y compila el ejecutable en Windows. Los tags `v*` publican un ZIP
+en Releases con su suma SHA-256. Las capturas se pueden regenerar con `python tools/render_demo.py`.
 
 ## Arquitectura
 
